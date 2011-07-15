@@ -725,15 +725,6 @@
     CGContextFillPath(context);
 }
 
--(float)progress {
-    return progress;
-}
-
--(void)setProgress:(float)newProgress {
-    progress = newProgress;
-    [self setNeedsDisplay];
-}
-
 @end
 
 /////////////////////////////////////////////////////////////////////////////////////////////
