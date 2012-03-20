@@ -37,6 +37,7 @@ typedef enum {
     MBProgressHUDModeIndeterminate,
     /** Progress is shown using a MBRoundProgressView. */
 	MBProgressHUDModeDeterminate,
+  MBProgressHUDModeAnnularDeterminate,
 	/** Shows a custom view */
 	MBProgressHUDModeCustomView
 } MBProgressHUDMode;
@@ -145,9 +146,41 @@ typedef enum {
  * animations while disappearing.
  * @return YES if a HUD was found and removed, NO otherwise. 
  *
- * @see hideHUDForView:animated:
+ * @see showHUDAddedTo:animated:
  */
 + (BOOL)hideHUDForView:(UIView *)view animated:(BOOL)animated;
+
+/**
+ * Finds all the HUD subviews and hides them. The counterpart to this method is showHUDAddedTo:animated:.
+ *
+ * @param view The view that is going to be searched for HUD subviews.
+ * @param animated If set to YES the HUD will disappear using the current animationType. If set to NO the HUD will not use
+ * animations while disappearing.
+ * @return the number of HUD found in the subviews and removed.
+ *
+ * @see hideAllHUDForView:animated:
+ */
++ (NSUInteger)hideAllHUDsForView:(UIView *)view animated:(BOOL)animated;
+
+/**
+ * Finds a HUD subview and returns it. This is used internally by hideHUDForFiew:animated:, but can also be useful externally.
+ *
+ * @param view The view that is going to be searched for a HUD subview.
+ * @return A reference to the last HUD subview discovered.
+ *
+ * @see hideHUDForView:animated:
+ */
++ (MBProgressHUD *)HUDForView:(UIView *)view;
+
+/**
+ * Finds all HUD subviews and returns them. This is used internally by hideAllHUDsForView:animated:, but can also be useful externally.
+ *
+ * @param view The view that is going to be searched for HUD subviews.
+ * @return All found HUD views (array of MBProgressHUD objects).
+ *
+ * @see hideAllHUDsForView:animated:
+ */
++ (NSArray *)allHUDsForView:(UIView *)view;
 
 /** 
  * A convenience constructor that initializes the HUD with the window's bounds. Calls the designated constructor with
@@ -390,12 +423,15 @@ typedef enum {
 @interface MBRoundProgressView : UIView {
 @private
     float _progress;
+  BOOL _isAnnular;
 }
 
 /**
  * Progress (0.0 to 1.0)
  */
 @property (nonatomic, assign) float progress;
+
+@property (nonatomic, assign) BOOL isAnnular;
 
 @end
 
