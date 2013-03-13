@@ -1,6 +1,6 @@
 //
 // MBProgressHUD.m
-// Version 0.5
+// Version 0.6
 // Created by Matej Bukovinski on 2.4.09.
 //
 
@@ -15,6 +15,12 @@
 	#define MB_AUTORELEASE(exp) [exp autorelease]
 	#define MB_RELEASE(exp) [exp release]
 	#define MB_RETAIN(exp) [exp retain]
+#endif
+
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 60000
+    #define MBLabelAlignmentCenter NSTextAlignmentCenter
+#else
+    #define MBLabelAlignmentCenter UITextAlignmentCenter
 #endif
 
 

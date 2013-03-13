@@ -1,12 +1,12 @@
 //
 //  MBProgressHUD.h
-//  Version 0.5
+//  Version 0.6
 //  Created by Matej Bukovinski on 2.4.09.
 //
 
 // This code is distributed under the terms and conditions of the MIT license. 
 
-// Copyright (c) 2011 Matej Bukovinski
+// Copyright (c) 2013 Matej Bukovinski
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -74,17 +74,9 @@ typedef enum {
 #endif
 #endif
 
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 60000
-	#define MBLabelAlignmentCenter NSTextAlignmentCenter
-#else
-	#define MBLabelAlignmentCenter UITextAlignmentCenter
-#endif
-
 #if NS_BLOCKS_AVAILABLE
 typedef void (^MBProgressHUDCompletionBlock)();
 #endif
-
-
 
 
 /** 
@@ -142,7 +134,7 @@ typedef void (^MBProgressHUDCompletionBlock)();
  * animations while disappearing.
  * @return the number of HUDs found and removed.
  *
- * @see hideAllHUDForView:animated:
+ * @see hideHUDForView:animated:
  * @see animationType
  */
 + (NSUInteger)hideAllHUDsForView:(UIView *)view animated:(BOOL)animated;
@@ -235,21 +227,21 @@ typedef void (^MBProgressHUDCompletionBlock)();
 /**
  * Shows the HUD while a block is executing on a background queue, then hides the HUD.
  *
- * @see showAnimated:whileExecutingBlock:onQueue:completion:
+ * @see showAnimated:whileExecutingBlock:onQueue:completionBlock:
  */
 - (void)showAnimated:(BOOL)animated whileExecutingBlock:(dispatch_block_t)block;
 
 /**
  * Shows the HUD while a block is executing on a background queue, then hides the HUD.
  *
- * @see showAnimated:whileExecutingBlock:onQueue:completion:
+ * @see showAnimated:whileExecutingBlock:onQueue:completionBlock:
  */
 - (void)showAnimated:(BOOL)animated whileExecutingBlock:(dispatch_block_t)block completionBlock:(MBProgressHUDCompletionBlock)completion;
 
 /**
  * Shows the HUD while a block is executing on the specified dispatch queue, then hides the HUD.
  *
- * @see showAnimated:whileExecutingBlock:onQueue:completion:
+ * @see showAnimated:whileExecutingBlock:onQueue:completionBlock:
  */
 - (void)showAnimated:(BOOL)animated whileExecutingBlock:(dispatch_block_t)block onQueue:(dispatch_queue_t)queue;
 
@@ -332,7 +324,7 @@ typedef void (^MBProgressHUDCompletionBlock)();
 @property (assign) float xOffset;
 
 /** 
- * The y-ayis offset of the HUD relative to the centre of the superview. 
+ * The y-axis offset of the HUD relative to the centre of the superview. 
  */
 @property (assign) float yOffset;
 
