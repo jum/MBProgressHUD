@@ -34,13 +34,14 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 @property (nonatomic, assign) BOOL useAnimation;
 @property (nonatomic, assign, getter=hasFinished) BOOL finished;
 @property (nonatomic, strong) UIView *indicator;
-@property (nonatomic, strong) NSTimer *graceTimer;
-@property (nonatomic, strong) NSTimer *minShowTimer;
 @property (nonatomic, strong) NSDate *showStarted;
 @property (nonatomic, strong) NSArray *paddingConstraints;
 @property (nonatomic, strong) NSArray *bezelConstraints;
 @property (nonatomic, strong) UIView *topSpacer;
 @property (nonatomic, strong) UIView *bottomSpacer;
+@property (nonatomic, weak) NSTimer *graceTimer;
+@property (nonatomic, weak) NSTimer *minShowTimer;
+@property (nonatomic, weak) NSTimer *hideDelayTimer;
 
 // Deprecated
 @property (copy, nullable) MBProgressHUDCompletionBlock completionBlock;
@@ -138,6 +139,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 - (void)showAnimated:(BOOL)animated {
     MBMainThreadAssert();
+    [self.minShowTimer invalidate];
     self.useAnimation = animated;
     self.finished = NO;
     // If the grace time is set postpone the HUD display
@@ -154,6 +156,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 - (void)hideAnimated:(BOOL)animated {
     MBMainThreadAssert();
+    [self.graceTimer invalidate];
     self.useAnimation = animated;
     self.finished = YES;
     // If the minShow time is set, calculate how long the hud was shown,
@@ -172,11 +175,9 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 }
 
 - (void)hideAnimated:(BOOL)animated afterDelay:(NSTimeInterval)delay {
-    [self performSelector:@selector(hideDelayed:) withObject:[NSNumber numberWithBool:animated] afterDelay:delay];
-}
-
-- (void)hideDelayed:(NSNumber *)animated {
-    [self hideAnimated:[animated boolValue]];
+    NSTimer *timer = [NSTimer timerWithTimeInterval:delay target:self selector:@selector(handleHideTimer:) userInfo:@(animated) repeats:NO];
+    [[NSRunLoop currentRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+    self.hideDelayTimer = timer;
 }
 
 #pragma mark - Timer callbacks
@@ -192,6 +193,10 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     [self hideUsingAnimation:self.useAnimation];
 }
 
+- (void)handleHideTimer:(NSTimer *)timer {
+    [self hideAnimated:[timer.userInfo boolValue]];
+}
+
 #pragma mark - View Hierrarchy
 
 - (void)didMoveToSuperview {
@@ -201,8 +206,12 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 #pragma mark - Internal show & hide operations
 
 - (void)showUsingAnimation:(BOOL)animated {
+    // Cancel any previous animations
+    [self.bezelView.layer removeAllAnimations];
+    [self.backgroundView.layer removeAllAnimations];
+
     // Cancel any scheduled hideDelayed: calls
-    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    [self.hideDelayTimer invalidate];
 
     self.showStarted = [NSDate date];
     self.alpha = 1.f;
@@ -220,15 +229,16 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 - (void)hideUsingAnimation:(BOOL)animated {
     if (animated && self.showStarted) {
+        self.showStarted = nil;
         [self animateIn:NO withType:self.animationType completion:^(BOOL finished) {
-            [self done];
+            [self doneFinished:finished];
         }];
     } else {
+        self.showStarted = nil;
         self.bezelView.alpha = 0.f;
         self.backgroundView.alpha = 1.f;
-        [self done];
+        [self doneFinished:YES];
     }
-    self.showStarted = nil;
 }
 
 - (void)animateIn:(BOOL)animatingIn withType:(MBProgressHUDAnimation)type completion:(void(^)(BOOL finished))completion {
@@ -265,7 +275,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     };
 
     // Spring animations are nicer, but only available on iOS 7+
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000 || TARGET_OS_TV
     if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
         [UIView animateWithDuration:0.3 delay:0. usingSpringWithDamping:1.f initialSpringVelocity:0.f options:UIViewAnimationOptionBeginFromCurrentState animations:animations completion:completion];
         return;
@@ -274,17 +284,22 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     [UIView animateWithDuration:0.3 delay:0. options:UIViewAnimationOptionBeginFromCurrentState animations:animations completion:completion];
 }
 
-- (void)done {
-    [NSObject cancelPreviousPerformRequestsWithTarget:self];
-    self.alpha = 0.0f;
-    if (self.removeFromSuperViewOnHide) {
-        [self removeFromSuperview];
-    }
-    if (self.completionBlock) {
-        self.completionBlock();
-        self.completionBlock = NULL;
+- (void)doneFinished:(BOOL)finished {
+    // Cancel any scheduled hideDelayed: calls
+    [self.hideDelayTimer invalidate];
+
+    if (finished) {
+        self.alpha = 0.0f;
+        if (self.removeFromSuperViewOnHide) {
+            [self removeFromSuperview];
+        }
     }
 
+    if (self.completionBlock) {
+        MBProgressHUDCompletionBlock block = self.completionBlock;
+        self.completionBlock = NULL;
+        block();
+    }
     id<MBProgressHUDDelegate> delegate = self.delegate;
     if ([delegate respondsToSelector:@selector(hudWasHidden:)]) {
         [delegate performSelector:@selector(hudWasHidden:) withObject:self];
@@ -433,7 +448,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
         ((MBBarProgressView *)indicator).progressColor = color;
         ((MBBarProgressView *)indicator).lineColor = color;
     } else {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000 || TARGET_OS_TV
         if ([indicator respondsToSelector:@selector(setTintColor:)]) {
             [indicator setTintColor:color];
         }
@@ -442,7 +457,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 }
 
 - (void)updateBezelMotionEffects {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000 || TARGET_OS_TV
     MBBackgroundView *bezelView = self.bezelView;
     if (![bezelView respondsToSelector:@selector(addMotionEffect:)]) return;
 
@@ -613,7 +628,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 }
 
 - (void)setMargin:(CGFloat)margin {
-    if (margin != margin) {
+    if (margin != _margin) {
         _margin = margin;
         [self setNeedsUpdateConstraints];
     }
@@ -699,8 +714,15 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     BOOL iOS8OrLater = kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0;
     if (iOS8OrLater || ![self.superview isKindOfClass:[UIWindow class]]) return;
 
-    UIInterfaceOrientation orientation = [UIApplication sharedApplication].statusBarOrientation;
+    // Make extension friendly. Will not get called on extensions (iOS 8+) due to the above check.
+    // This just ensures we don't get a warning about extension-unsafe API.
+    Class UIApplicationClass = NSClassFromString(@"UIApplication");
+    if (!UIApplicationClass || ![UIApplicationClass respondsToSelector:@selector(sharedApplication)]) return;
+
+    UIApplication *application = [UIApplication performSelector:@selector(sharedApplication)];
+    UIInterfaceOrientation orientation = application.statusBarOrientation;
     CGFloat radians = 0;
+    
     if (UIInterfaceOrientationIsLandscape(orientation)) {
         radians = orientation == UIInterfaceOrientationLandscapeLeft ? -(CGFloat)M_PI_2 : (CGFloat)M_PI_2;
         // Window coordinates differ!
@@ -987,10 +1009,11 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 @interface MBBackgroundView ()
 
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
 @property UIVisualEffectView *effectView;
-#endif
+# else
 @property UIToolbar *toolbar;
+#endif
 
 @end
 
@@ -1003,7 +1026,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     if ((self = [super initWithFrame:frame])) {
         if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
             _style = MBProgressHUDBackgroundStyleBlur;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
             _color = [UIColor colorWithWhite:0.8f alpha:0.6f];
 #else
             _color = [UIColor colorWithWhite:0.95f alpha:0.6f];
@@ -1053,7 +1076,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 - (void)updateForBackgroundStyle {
     MBProgressHUDBackgroundStyle style = self.style;
     if (style == MBProgressHUDBackgroundStyleBlur) {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
         UIBlurEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
         UIVisualEffectView *effectView = [[UIVisualEffectView alloc] initWithEffect:effect];
         [self addSubview:effectView];
@@ -1072,7 +1095,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
         self.toolbar = toolbar;
 #endif
     } else {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
         [self.effectView removeFromSuperview];
         self.effectView = nil;
 #else
@@ -1085,7 +1108,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 - (void)updateViewsForColor:(UIColor *)color {
     if (self.style == MBProgressHUDBackgroundStyleBlur) {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
         self.backgroundColor = self.color;
 #else
         self.toolbar.barTintColor = color;
