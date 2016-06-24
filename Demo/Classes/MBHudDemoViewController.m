@@ -57,8 +57,8 @@
         [MBExample exampleWithTitle:@"Mode switching" selector:@selector(modeSwitchingExample)]],
       @[[MBExample exampleWithTitle:@"On window" selector:@selector(indeterminateExample)],
         [MBExample exampleWithTitle:@"NSURLSession" selector:@selector(networkingExample)],
-        [MBExample exampleWithTitle:@"Dim background" selector:@selector(indeterminateExample)],
-        [MBExample exampleWithTitle:@"Colored" selector:@selector(indeterminateExample)]]
+        [MBExample exampleWithTitle:@"Dim background" selector:@selector(dimBackgroundExample)],
+        [MBExample exampleWithTitle:@"Colored" selector:@selector(colorExample)]]
       ];
 }
 
@@ -249,6 +249,36 @@
     hud.minSize = CGSizeMake(150.f, 100.f);
 
     [self doSomeNetworkWorkWithProgress];
+}
+
+- (void)dimBackgroundExample {
+	MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:self.navigationController.view animated:YES];
+
+	// Change the background view style and color.
+	hud.backgroundView.style = MBProgressHUDBackgroundStyleSolidColor;
+	hud.backgroundView.color = [UIColor colorWithWhite:0.f alpha:0.1f];
+
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		[self doSomeWork];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[hud hideAnimated:YES];
+		});
+	});
+}
+
+- (void)colorExample {
+	MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:self.navigationController.view animated:YES];
+	hud.contentColor = [UIColor colorWithRed:0.f green:0.6f blue:0.7f alpha:1.f];
+
+	// Set the label text.
+	hud.label.text = NSLocalizedString(@"Loading...", @"HUD loading title");
+
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		[self doSomeWork];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[hud hideAnimated:YES];
+		});
+	});
 }
 
 #pragma mark - Tasks

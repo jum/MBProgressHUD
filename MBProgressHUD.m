@@ -230,13 +230,13 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     if (animated && self.showStarted) {
         self.showStarted = nil;
         [self animateIn:NO withType:self.animationType completion:^(BOOL finished) {
-            [self doneFinished:finished];
+            [self done];
         }];
     } else {
         self.showStarted = nil;
         self.bezelView.alpha = 0.f;
         self.backgroundView.alpha = 1.f;
-        [self doneFinished:YES];
+        [self done];
     }
 }
 
@@ -283,11 +283,11 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     [UIView animateWithDuration:0.3 delay:0. options:UIViewAnimationOptionBeginFromCurrentState animations:animations completion:completion];
 }
 
-- (void)doneFinished:(BOOL)finished {
+- (void)done {
     // Cancel any scheduled hideDelayed: calls
     [self.hideDelayTimer invalidate];
 
-    if (finished) {
+    if (self.hasFinished) {
         self.alpha = 0.0f;
         if (self.removeFromSuperViewOnHide) {
             [self removeFromSuperview];
@@ -439,15 +439,47 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     }
 #pragma clang diagnostic pop
 
+    // UIApprance settings are prioritized. If they are preset the set color is ignored.
+
     UIView *indicator = self.indicator;
     if ([indicator isKindOfClass:[UIActivityIndicatorView class]]) {
-        ((UIActivityIndicatorView *)indicator).color = color;
+        UIActivityIndicatorView *appearance = nil;
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < 90000
+        appearance = [UIActivityIndicatorView appearanceWhenContainedIn:[MBProgressHUD class], nil];
+#else
+        // For iOS9+
+        appearance = [UIActivityIndicatorView appearanceWhenContainedInInstancesOfClasses:@[[MBProgressHUD class]]];
+#endif
+        
+        if (appearance.color == nil) {
+            ((UIActivityIndicatorView *)indicator).color = color;
+        }
     } else if ([indicator isKindOfClass:[MBRoundProgressView class]]) {
-        ((MBRoundProgressView *)indicator).progressTintColor = color;
-        ((MBRoundProgressView *)indicator).backgroundTintColor = [color colorWithAlphaComponent:0.1];
+        MBRoundProgressView *appearance = nil;
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < 90000
+        appearance = [MBRoundProgressView appearanceWhenContainedIn:[MBProgressHUD class], nil];
+#else
+        appearance = [MBRoundProgressView appearanceWhenContainedInInstancesOfClasses:@[[MBProgressHUD class]]];
+#endif
+        if (appearance.progressTintColor == nil) {
+            ((MBRoundProgressView *)indicator).progressTintColor = color;
+        }
+        if (appearance.backgroundTintColor == nil) {
+            ((MBRoundProgressView *)indicator).backgroundTintColor = [color colorWithAlphaComponent:0.1];
+        }
     } else if ([indicator isKindOfClass:[MBBarProgressView class]]) {
-        ((MBBarProgressView *)indicator).progressColor = color;
-        ((MBBarProgressView *)indicator).lineColor = color;
+        MBBarProgressView *appearance = nil;
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < 90000
+        appearance = [MBBarProgressView appearanceWhenContainedIn:[MBProgressHUD class], nil];
+#else
+        appearance = [MBBarProgressView appearanceWhenContainedInInstancesOfClasses:@[[MBProgressHUD class]]];
+#endif
+        if (appearance.progressColor == nil) {
+            ((MBBarProgressView *)indicator).progressColor = color;
+        }
+        if (appearance.lineColor == nil) {
+            ((MBBarProgressView *)indicator).lineColor = color;
+        }
     } else {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000 || TARGET_OS_TV
         if ([indicator respondsToSelector:@selector(setTintColor:)]) {
@@ -1012,9 +1044,8 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
 @property UIVisualEffectView *effectView;
-# else
-@property UIToolbar *toolbar;
 #endif
+@property UIToolbar *toolbar;
 
 @end
 
@@ -1027,11 +1058,11 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     if ((self = [super initWithFrame:frame])) {
         if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_7_0) {
             _style = MBProgressHUDBackgroundStyleBlur;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
-            _color = [UIColor colorWithWhite:0.8f alpha:0.6f];
-#else
-            _color = [UIColor colorWithWhite:0.95f alpha:0.6f];
-#endif
+            if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
+                _color = [UIColor colorWithWhite:0.8f alpha:0.6f];
+            } else {
+                _color = [UIColor colorWithWhite:0.95f alpha:0.6f];
+            }
         } else {
             _style = MBProgressHUDBackgroundStyleSolidColor;
             _color = [[UIColor blackColor] colorWithAlphaComponent:0.8];
@@ -1078,30 +1109,37 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     MBProgressHUDBackgroundStyle style = self.style;
     if (style == MBProgressHUDBackgroundStyleBlur) {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
-        UIBlurEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
-        UIVisualEffectView *effectView = [[UIVisualEffectView alloc] initWithEffect:effect];
-        [self addSubview:effectView];
-        effectView.frame = self.bounds;
-        effectView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
-        self.backgroundColor = self.color;
-        self.layer.allowsGroupOpacity = NO;
-        self.effectView = effectView;
-#else
-        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectInset(self.bounds, -100.f, -100.f)];
-        toolbar.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
-        toolbar.barTintColor = self.color;
-        toolbar.translucent = YES;
-        toolbar.barTintColor = color;
-        [self addSubview:toolbar];
-        self.toolbar = toolbar;
+        if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
+            UIBlurEffect *effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
+            UIVisualEffectView *effectView = [[UIVisualEffectView alloc] initWithEffect:effect];
+            [self addSubview:effectView];
+            effectView.frame = self.bounds;
+            effectView.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+            self.backgroundColor = self.color;
+            self.layer.allowsGroupOpacity = NO;
+            self.effectView = effectView;
+        } else {
+#endif
+            UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectInset(self.bounds, -100.f, -100.f)];
+            toolbar.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
+            toolbar.barTintColor = self.color;
+            toolbar.translucent = YES;
+            [self addSubview:toolbar];
+            self.toolbar = toolbar;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
+        }
 #endif
     } else {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
-        [self.effectView removeFromSuperview];
-        self.effectView = nil;
-#else
-        [self.toolbar removeFromSuperview];
-        self.toolbar = nil;
+        if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
+            [self.effectView removeFromSuperview];
+            self.effectView = nil;
+        } else {
+#endif
+            [self.toolbar removeFromSuperview];
+            self.toolbar = nil;
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
+        }
 #endif
         self.backgroundColor = self.color;
     }
@@ -1109,11 +1147,11 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 
 - (void)updateViewsForColor:(UIColor *)color {
     if (self.style == MBProgressHUDBackgroundStyleBlur) {
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
-        self.backgroundColor = self.color;
-#else
-        self.toolbar.barTintColor = color;
-#endif
+        if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
+            self.backgroundColor = self.color;
+        } else {
+            self.toolbar.barTintColor = color;
+        }
     } else {
         self.backgroundColor = self.color;
     }
