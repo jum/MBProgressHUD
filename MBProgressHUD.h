@@ -1,12 +1,12 @@
 //
 //  MBProgressHUD.h
-//  Version 0.9.2
+//  Version 1.0.0
 //  Created by Matej Bukovinski on 2.4.09.
 //
 
 // This code is distributed under the terms and conditions of the MIT license. 
 
-// Copyright (c) 2009-2015 Matej Bukovinski
+// Copyright © 2009-2016 Matej Bukovinski
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -260,6 +260,13 @@ NS_ASSUME_NONNULL_BEGIN
  * The progress of the progress indicator, from 0.0 to 1.0. Defaults to 0.0.
  */
 @property (assign, nonatomic) float progress;
+
+/// @name ProgressObject
+
+/**
+ * The NSProgress object feeding the progress information to the progress indicator.
+ */
+@property (strong, nonatomic, nullable) NSProgress *progressObject;
 
 /// @name Views
 

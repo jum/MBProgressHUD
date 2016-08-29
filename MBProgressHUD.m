@@ -1,6 +1,6 @@
 //
 // MBProgressHUD.m
-// Version 0.9.2
+// Version 1.0.0
 // Created by Matej Bukovinski on 2.4.09.
 //
 
@@ -42,6 +42,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 @property (nonatomic, weak) NSTimer *graceTimer;
 @property (nonatomic, weak) NSTimer *minShowTimer;
 @property (nonatomic, weak) NSTimer *hideDelayTimer;
+@property (nonatomic, weak) CADisplayLink *progressObjectDisplayLink;
 
 // Deprecated
 @property (assign) BOOL taskInProgress;
@@ -215,6 +216,9 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     self.showStarted = [NSDate date];
     self.alpha = 1.f;
 
+    // Needed in case we hide and re-show with the same NSProgress object attached.
+    [self setNSProgressDisplayLinkEnabled:YES];
+
     if (animated) {
         [self animateIn:YES withType:self.animationType completion:NULL];
     } else {
@@ -286,6 +290,7 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 - (void)done {
     // Cancel any scheduled hideDelayed: calls
     [self.hideDelayTimer invalidate];
+    [self setNSProgressDisplayLinkEnabled:NO];
 
     if (self.hasFinished) {
         self.alpha = 0.0f;
@@ -610,7 +615,13 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 }
 
 - (void)layoutSubviews {
-    [self updatePaddingConstraints];
+    // There is no need to update constraints if they are going to
+    // be recreated in [super layoutSubviews] due to needsUpdateConstraints being set.
+    // This also avoids an issue on iOS 8, where updatePaddingConstraints
+    // would trigger a zombie object access.
+    if (!self.needsUpdateConstraints) {
+        [self updatePaddingConstraints];
+    }
     [super layoutSubviews];
 }
 
@@ -681,6 +692,23 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
     }
 }
 
+- (void)setProgressObjectDisplayLink:(CADisplayLink *)progressObjectDisplayLink {
+    if (progressObjectDisplayLink != _progressObjectDisplayLink) {
+        [_progressObjectDisplayLink invalidate];
+        
+        _progressObjectDisplayLink = progressObjectDisplayLink;
+        
+        [_progressObjectDisplayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
+    }
+}
+
+- (void)setProgressObject:(NSProgress *)progressObject {
+    if (progressObject != _progressObject) {
+        _progressObject = progressObject;
+        [self setNSProgressDisplayLinkEnabled:YES];
+    }
+}
+
 - (void)setProgress:(float)progress {
     if (progress != _progress) {
         _progress = progress;
@@ -703,6 +731,25 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
         _defaultMotionEffectsEnabled = defaultMotionEffectsEnabled;
         [self updateBezelMotionEffects];
     }
+}
+
+#pragma mark - NSProgress
+
+- (void)setNSProgressDisplayLinkEnabled:(BOOL)enabled {
+    // We're using CADisplayLink, because NSProgress can change very quickly and observing it may starve the main thread,
+    // so we're refreshing the progress only every frame draw
+    if (enabled && self.progressObject) {
+        // Only create if not already active.
+        if (!self.progressObjectDisplayLink) {
+            self.progressObjectDisplayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(updateProgressFromProgressObject)];
+        }
+    } else {
+        self.progressObjectDisplayLink = nil;
+    }
+}
+
+- (void)updateProgressFromProgressObject {
+    self.progress = self.progressObject.fractionCompleted;
 }
 
 #pragma mark - Notifications
@@ -1045,7 +1092,9 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
 @property UIVisualEffectView *effectView;
 #endif
+#if !TARGET_OS_TV
 @property UIToolbar *toolbar;
+#endif
 
 @end
 
@@ -1120,12 +1169,14 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
             self.effectView = effectView;
         } else {
 #endif
+#if !TARGET_OS_TV
             UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectInset(self.bounds, -100.f, -100.f)];
             toolbar.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
             toolbar.barTintColor = self.color;
             toolbar.translucent = YES;
             [self addSubview:toolbar];
             self.toolbar = toolbar;
+#endif
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
         }
 #endif
@@ -1136,8 +1187,10 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
             self.effectView = nil;
         } else {
 #endif
+#if !TARGET_OS_TV
             [self.toolbar removeFromSuperview];
             self.toolbar = nil;
+#endif
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000 || TARGET_OS_TV
         }
 #endif
@@ -1150,7 +1203,9 @@ static const CGFloat MBDefaultDetailsLabelFontSize = 12.f;
         if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
             self.backgroundColor = self.color;
         } else {
+#if !TARGET_OS_TV
             self.toolbar.barTintColor = color;
+#endif
         }
     } else {
         self.backgroundColor = self.color;
